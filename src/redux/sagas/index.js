@@ -1,65 +1,55 @@
 import {
-    // takeLatest,
-    // takeLeading,
-    takeEvery,
-    put,
+    // fork,
+    spawn,
     call,
-    fork,
-    // spawn
-} from "redux-saga/effects"
+    all,
+    // delay,
+    take,
+    // takeLatest,
+    // cancel,
+    actionChannel
+} from 'redux-saga/effects';
+// import loadBasicData from './initialSagas';
+// import pageLoaderSaga from './pageLoaderSaga';
 
-// const wait = (time) => new Promise(resolve => {
-//     setTimeout(resolve, time)
-// })
+export function* fetchPlanets() {
+    console.log('LOAD_SOME_DATA starts');
 
+    const response = yield call(fetch, 'https://swapi.dev/api/planets');
+    const data = yield call([response, response.json]);
 
-const getFetch = async (pattern) => {
-    const request = await fetch(`https://swapi.dev/api/${pattern}`)
-    return await request.json()
+    console.log('LOAD_SOME_DATA completed', data);
 }
 
-export function* loadPeoples() {
-    // const peoples = yield fork(getFetch, "people") /// forky chi spasum asinxrony verjacni bayc lineluc heto rendera linum
-    const peoples = yield call(getFetch, "people") /// isk ete ka argument func-i anunic heto storaketov argumenty
-    yield put({type: "SET_PEOPLE", payload: peoples.results})
+export function* loadOnAction() {
+    const channel = yield actionChannel('LOAD_SOME_DATA');
 
+    while (true) {
+        yield take(channel);
+
+        yield call(fetchPlanets);
+    }
 }
-
-export function* loadPlanets() {
-    // const planets = yield fork(getFetch, "planets") ///forky chi spasum asinxrony verjacni bayc lineluc heto rendera linum
-    const planets = yield call(getFetch, "planets") //// call spasecnum asinxrony prcni nor sharunakuma
-    yield put({type: "SET_PLANETS", payload: planets.results})
-}
-
-
-export function* workerSaga() {
-    // yield spawn(loadPeoples) /// ete sranov kanchenq fnc-y u error lini meki mej en myusy klcvi store-um
-    yield fork(loadPeoples)    ///   isk sranov ete meki mej errora linum chi lcvum story
-    yield fork(loadPlanets)
-    // yield wait(1000)
-
-}
-
-export function* watchLoadDataSaga() {
-    // while (true) {
-    //     yield take("CLICK")
-    //     yield workerSaga()
-    // }
-
-    yield takeEvery("CLICK", workerSaga)
-
-
-    yield takeEvery("LOAD_DATA", workerSaga)
-
-
-    // yield takeLatest("CLICK", workerSaga) ///// for optimization /// menak verjin clickna ashxtum
-
-
-    // yield takeLeading("CLICK", workerSaga) //// arajin clicki jamanak antesvum e mnacac clickery minchev asinxron gorcoxutyunnery verjana///
-}
-
 
 export default function* rootSaga() {
-    console.log("Saga Ready!")
-    yield fork(watchLoadDataSaga)
+    const sagas = [
+        // loadBasicData,
+        // pageLoaderSaga,
+        loadOnAction
+    ];
+
+    const retrySagas = yield sagas.map(saga => {
+        return spawn(function* () {
+            while (true) {
+                try {
+                    yield call(saga);
+                    break;
+                } catch (e) {
+                    console.log(e);
+                }
+            }
+        })
+    });
+
+    yield all(retrySagas);
 }
